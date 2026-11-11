@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skidmore Baseball Analytics, 2026</title>
+<style>
+:root{--font-anthropic-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--font-anthropic-serif:Georgia,"Times New Roman",serif}
+body{margin:0;background:#f3f5f2}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+// Minimal stand-in for the Claude dashboard runtime: loads the CSVs, runs calcs, draws.
+window.dash = (() => {
+  const files = { batting: 'data/batting.csv', pitching: 'data/pitching.csv', games: 'data/games.csv' };
+  const store = {}, calcs = {}, draws = {};
+  const data = (id) => {
+    const c = calcs[id];
+    if (c) {
+      if (!('v' in c)) {
+        if (!c.inputs.every((i) => data(i).status === 'ok')) return { status: 'loading', data: null };
+        c.v = c.fn(...c.inputs.map((i) => data(i).data));
+      }
+      return { status: 'ok', data: c.v };
+    }
+    return store[id] ? { status: 'ok', data: store[id] } : { status: 'loading', data: [] };
+  };
+  const run = () => Object.entries(draws).forEach(([name, fn]) =>
+    document.querySelectorAll(`[data-draw="${name}"]`).forEach((el) => { if (!el.closest('[hidden]')) fn(el); }));
+  Promise.all(Object.entries(files).map(([id, url]) => d3.csv(url).then((rows) => { store[id] = rows; }))).then(() => {
+    run();
+    new MutationObserver(run).observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+  });
+  let t;
+  addEventListener('resize', () => { clearTimeout(t); t = setTimeout(run, 150); });
+  return {
+    colors: ['#2f5143'],
+    calc: (id, o) => { calcs[id] = o; },
+    data,
+    draw: (name, fn) => { draws[name] = fn; },
+    setLink: (id) => history.replaceState(null, '', '#' + id)
+  };
+})();
+</script>
+</head>
+<body>
+<style>
+.bb{--g:#2f5143;--g2:#3d6455;--gold:#d8bd5c;--bg:#f3f5f2;--card:#ffffff;--ink:#1f3a30;--muted:#5d6b65;--line:#dfe4e0;--loss:#c4693f;
+  background:var(--bg);color:var(--ink);font-family:var(--font-anthropic-sans);min-height:100%}
+.bb-top{background:var(--g);color:#fff;border-bottom:4px solid var(--gold);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.bb-brand{display:flex;align-items:center;gap:14px}
+.bb-mono{font-family:var(--font-anthropic-serif);color:var(--gold);font-size:34px;line-height:1}
+.bb-name{font-weight:700;letter-spacing:.14em;font-size:16px;line-height:1.15}
+.bb-name small{display:block;font-weight:400;font-size:10px;letter-spacing:.3em;opacity:.9}
+.bb-meta{text-align:right;font-size:12px}
+.bb-meta b{display:block;letter-spacing:.25em;font-weight:500;font-size:11px;margin-bottom:2px}
+.bb-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--line);overflow-x:auto}
+.bb-tab{appearance:none;background:none;border:0;border-bottom:3px solid transparent;padding:10px 10px 8px;font:inherit;font-size:14px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.bb-tab[aria-selected=true]{color:var(--g);font-weight:600;border-bottom-color:var(--g)}
+.bb-body{padding:24px 20px 36px;max-width:1100px;display:flex;flex-direction:column;gap:24px}
+.bb-panel{display:flex;flex-direction:column;gap:24px}
+.bb-eyebrow{font-size:11px;letter-spacing:.22em;font-weight:600;color:var(--g);text-transform:uppercase;margin:0 0 6px}
+.bb h1{font-family:var(--font-anthropic-serif);font-weight:400;font-size:clamp(26px,3.6vw,38px);line-height:1.05;margin:0;color:var(--ink)}
+.bb-lede{margin:10px 0 0;color:var(--muted);font-size:15px;line-height:1.5;max-width:66ch}
+.bb-lede b{color:var(--ink);font-variant-numeric:tabular-nums}
+.bb h2{font-size:17px;font-weight:600;margin:0 0 6px;color:var(--ink)}
+.bb h2.bb-group{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--g);margin:4px 0 -12px}
+.bb-sub{margin:0 0 12px;font-size:13px;color:var(--muted)}
+.bb-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.bb-card{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--g);border-radius:10px;padding:14px 16px}
+.bb-k{font-size:13px;color:var(--muted)}
+.bb-v{font-family:var(--font-anthropic-serif);font-weight:400;font-size:32px;line-height:1.1;color:var(--g);font-variant-numeric:tabular-nums;margin:6px 0 4px}
+.bb-s{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bb-stand{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.bb-plain{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.bb-plain p{margin:0;font-size:14px;line-height:1.55;color:var(--muted)}
+.bb-plain p b{color:var(--ink);font-variant-numeric:tabular-nums}
+.bb-chart{position:relative;min-height:260px}
+.bb-chart svg{display:block;overflow:visible}
+.bb-chart .tick text{fill:var(--muted);font-size:12px;font-family:var(--font-anthropic-sans)}
+.bb-chart .domain{stroke:var(--line)}
+.bb-chart .tick line{stroke:var(--line)}
+.bb-lbl{fill:var(--muted);font-size:12px;font-family:var(--font-anthropic-sans)}
+.bb-val{fill:var(--ink);font-size:12px;font-variant-numeric:tabular-nums;font-family:var(--font-anthropic-sans)}
+.bb-tip{position:absolute;pointer-events:none;background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:0 4px 14px rgba(0,0,0,.12);border-radius:8px;padding:6px 9px;font-size:12px;white-space:nowrap;z-index:2}
+.bb-tip-m{color:var(--muted)}
+.bb-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.bb-wrap{overflow-x:auto}
+.bb table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.bb th,.bb td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.bb th:first-child,.bb td:first-child{text-align:left}
+.bb th{color:var(--muted);font-weight:600}
+.bb tbody tr:hover{background:var(--bg)}
+.bb-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--muted);margin-bottom:10px}
+.bb-sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.bb-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:1px;background:var(--muted)}
+.bb details{font-size:14px;color:var(--muted)}
+.bb details summary{cursor:pointer;color:var(--g);font-weight:600}
+.bb details p{margin:8px 0;line-height:1.5}
+[data-dash-source-state=refreshing]{opacity:.5}
+</style>
+
+<div class="bb">
+  <div class="bb-top" id="top">
+    <div class="bb-brand">
+      <div class="bb-mono">S</div>
+      <div class="bb-name">SKIDMORE<small>BASEBALL ANALYTICS</small></div>
+    </div>
+    <div class="bb-meta"><b>2026 SEASON</b>Final · <span data-draw="v" data-source="record" data-field="games" data-row="0">—</span> games played</div>
+  </div>
+
+  <nav class="bb-tabs" role="tablist" aria-label="Sections">
+    <button class="bb-tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="bb-tab" role="tab" data-tab="players" aria-selected="false">Players</button>
+    <button class="bb-tab" role="tab" data-tab="season" aria-selected="false">Season</button>
+    <button class="bb-tab" role="tab" data-tab="data" aria-selected="false">Data</button>
+  </nav>
+
+  <div class="bb-body">
+    <section class="bb-panel" id="overview" role="tabpanel">
+      <header>
+        <p class="bb-eyebrow">Season in review</p>
+        <h1>How the team played.</h1>
+        <p class="bb-lede">Skidmore went <b data-draw="v" data-source="record" data-field="wins" data-row="0">—</b>-<b data-draw="v" data-source="record" data-field="losses" data-row="0">—</b> overall but <b data-draw="v" data-source="record" data-field="conf_wins" data-row="0">—</b>-<b data-draw="v" data-source="record" data-field="conf_losses" data-row="0">—</b> in Liberty League play, and <b data-draw="v" data-source="record" data-field="onerun_wins" data-row="0">—</b>-<b data-draw="v" data-source="record" data-field="onerun_losses" data-row="0">—</b> in one-run games. The offense posted a <b data-draw="v" data-fmt="avg" data-source="team_batting" data-field="ops" data-row="0">—</b> OPS, while the staff walked <b data-draw="v" data-fmt="d1" data-source="team_pitching" data-field="bb9" data-row="0">—</b> batters per nine innings.</p>
+      </header>
+
+      <div class="bb-tiles" id="tiles">
+        <div class="bb-card" id="tile-record">
+          <div class="bb-k">Record</div>
+          <div class="bb-v"><span data-draw="v" data-source="record" data-field="wins" data-row="0">—</span>-<span data-draw="v" data-source="record" data-field="losses" data-row="0">—</span></div>
+          <div class="bb-s"><span data-draw="v" data-source="record" data-field="conf_wins" data-row="0">—</span>-<span data-draw="v" data-source="record" data-field="conf_losses" data-row="0">—</span> in the Liberty League</div>
+        </div>
+        <div class="bb-card" id="tile-diff">
+          <div class="bb-k">Run differential</div>
+          <div class="bb-v"><span data-draw="v" data-fmt="signed" data-source="record" data-field="run_diff" data-row="0">—</span></div>
+          <div class="bb-s"><span data-draw="v" data-source="record" data-field="runs_scored" data-row="0">—</span> scored, <span data-draw="v" data-source="record" data-field="runs_allowed" data-row="0">—</span> allowed</div>
+        </div>
+        <div class="bb-card" id="tile-ops">
+          <div class="bb-k">Team OPS</div>
+          <div class="bb-v"><span data-draw="v" data-fmt="avg" data-source="team_batting" data-field="ops" data-row="0">—</span></div>
+          <div class="bb-s">AVG <span data-draw="v" data-fmt="avg" data-source="team_batting" data-field="avg" data-row="0">—</span>, OBP <span data-draw="v" data-fmt="avg" data-source="team_batting" data-field="obp" data-row="0">—</span></div>
+        </div>
+        <div class="bb-card" id="tile-era">
+          <div class="bb-k">Team ERA</div>
+          <div class="bb-v"><span data-draw="v" data-fmt="d2" data-source="team_pitching" data-field="era" data-row="0">—</span></div>
+          <div class="bb-s">WHIP <span data-draw="v" data-fmt="d2" data-source="team_pitching" data-field="whip" data-row="0">—</span>, <span data-draw="v" data-fmt="d1" data-source="team_pitching" data-field="k9" data-row="0">—</span> K/9</div>
+        </div>
+      </div>
+
+      <div id="standouts">
+        <h2>What stands out</h2>
+        <div class="bb-stand">
+          <div class="bb-plain" id="so-scoring">
+            <p class="bb-eyebrow">Scoring</p>
+            <p>The offense scored <b data-draw="v" data-fmt="d1" data-source="record" data-field="runs_per_game" data-row="0">—</b> runs a game with a <b data-draw="v" data-fmt="avg" data-source="team_batting" data-field="ops" data-row="0">—</b> team OPS. <b data-draw="v" data-fmt="text" data-source="leaders" data-field="ops_leader" data-row="0">—</b> led the lineup at <b data-draw="v" data-fmt="avg" data-source="leaders" data-field="ops_leader_ops" data-row="0">—</b>.</p>
+          </div>
+          <div class="bb-plain" id="so-pitching">
+            <p class="bb-eyebrow">Pitching</p>
+            <p>The staff struck out <b data-draw="v" data-fmt="d1" data-source="team_pitching" data-field="k9" data-row="0">—</b> per nine but walked <b data-draw="v" data-fmt="d1" data-source="team_pitching" data-field="bb9" data-row="0">—</b>. <b data-draw="v" data-fmt="text" data-source="leaders" data-field="k_leader" data-row="0">—</b> had <b data-draw="v" data-source="leaders" data-field="k_leader_so" data-row="0">—</b> strikeouts, and <b data-draw="v" data-fmt="text" data-source="leaders" data-field="era_leader" data-row="0">—</b> had the best ERA among starters at <b data-draw="v" data-fmt="d2" data-source="leaders" data-field="era_leader_era" data-row="0">—</b>.</p>
+          </div>
+          <div class="bb-plain" id="so-close">
+            <p class="bb-eyebrow">Close games</p>
+            <p>Skidmore went <b data-draw="v" data-source="record" data-field="onerun_wins" data-row="0">—</b>-<b data-draw="v" data-source="record" data-field="onerun_losses" data-row="0">—</b> in one-run games and <b data-draw="v" data-source="record" data-field="conf_wins" data-row="0">—</b>-<b data-draw="v" data-source="record" data-field="conf_losses" data-row="0">—</b> in league play, against <b data-draw="v" data-source="record" data-field="nonconf_wins" data-row="0">—</b>-<b data-draw="v" data-source="record" data-field="nonconf_losses" data-row="0">—</b> outside the league.</p>
+          </div>
+          <div class="bb-plain" id="so-running">
+            <p class="bb-eyebrow">Baserunning</p>
+            <p>The team stole <b data-draw="v" data-source="team_batting" data-field="sb" data-row="0">—</b> bases in <b data-draw="v" data-source="team_batting" data-field="sb_att" data-row="0">—</b> tries, a success rate of <b data-draw="v" data-fmt="pct" data-source="team_batting" data-field="sb_pct" data-row="0">—</b>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bb-panel" id="players" role="tabpanel" hidden>
+      <header>
+        <p class="bb-eyebrow">Individual</p>
+        <h1>Who carried the team.</h1>
+      </header>
+      <h2 class="bb-group">Hitters</h2>
+      <div class="bb-two">
+        <div class="bb-plain" id="hitters">
+          <h2>Who drove the offense</h2>
+          <p class="bb-sub">OPS for hitters with 50+ at-bats. Dashed line is the team OPS.</p>
+          <div class="bb-chart" id="ops-chart" data-draw="ops-chart" data-source="batting team_batting"></div>
+        </div>
+        <div class="bb-plain" id="discipline">
+          <h2>Plate discipline</h2>
+          <p class="bb-sub">Walk rate vs. strikeout rate, hitters with 50+ at-bats. Up and to the left is better: more walks, fewer strikeouts. Dashed lines are team rates.</p>
+          <div class="bb-chart" id="discipline-chart" data-draw="discipline-chart" data-source="hitter_rates team_batting"></div>
+        </div>
+        <div class="bb-plain" id="power">
+          <h2>Power vs. average</h2>
+          <p class="bb-sub">Batting average vs. isolated power (slugging minus average), hitters with 50+ at-bats. Top right hits for both average and power.</p>
+          <div class="bb-chart" id="power-chart" data-draw="power-chart" data-source="hitter_rates"></div>
+        </div>
+        <div class="bb-plain" id="steals">
+          <h2>Stolen bases</h2>
+          <p class="bb-sub">Steals out of attempts, players with 4+ tries. The light bar is attempts.</p>
+          <div class="bb-chart" id="steals-chart" data-draw="steals-chart" data-source="batting"></div>
+        </div>
+      </div>
+      <h2 class="bb-group">Pitchers</h2>
+      <div class="bb-two">
+        <div class="bb-plain" id="pitchers">
+          <h2>Strikeouts vs. walks</h2>
+          <p class="bb-sub">Pitchers with 10+ innings. Up and to the left is better. Dashed lines are team rates.</p>
+          <div class="bb-chart" id="pitch-chart" data-draw="pitch-chart" data-source="pitch_rates team_pitching"></div>
+        </div>
+        <div class="bb-plain" id="workload">
+          <h2>Workload and results</h2>
+          <p class="bb-sub">Innings pitched by pitchers with 10+ innings, labeled with ERA. Green is better than the team ERA, orange is worse.</p>
+          <div class="bb-chart" id="workload-chart" data-draw="workload-chart" data-source="pitching team_pitching"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bb-panel" id="season" role="tabpanel" hidden>
+      <header>
+        <p class="bb-eyebrow">Game by game</p>
+        <h1>How the season unfolded.</h1>
+      </header>
+      <div class="bb-plain" id="games">
+        <h2>Run differential, game by game</h2>
+        <p class="bb-sub">Bars above the line are wins, below are losses. A dot under a bar marks a Liberty League game.</p>
+        <div class="bb-legend"><span><span class="bb-sw" style="background:#2f5143"></span>Win</span><span><span class="bb-sw" style="background:#c4693f"></span>Loss</span><span><span class="bb-dot"></span>League game</span></div>
+        <div class="bb-chart" id="games-chart" data-draw="games-chart" data-source="games"></div>
+      </div>
+    </section>
+
+    <section class="bb-panel" id="data" role="tabpanel" hidden>
+      <header>
+        <p class="bb-eyebrow">Full stats</p>
+        <h1>Every player, every number.</h1>
+      </header>
+      <div class="bb-plain" id="batting-table">
+        <h2>Batting</h2>
+        <div class="bb-wrap">
+          <table data-source="batting" data-row-key="player">
+            <thead><tr><th data-field="player">Player</th><th data-field="avg">AVG</th><th data-field="obp">OBP</th><th data-field="slg">SLG</th><th data-field="ops">OPS</th><th data-field="ab">AB</th><th data-field="r">R</th><th data-field="h">H</th><th data-field="2b">2B</th><th data-field="hr">HR</th><th data-field="rbi">RBI</th><th data-field="bb">BB</th><th data-field="so">SO</th><th data-field="sb">SB</th></tr></thead>
+            <tbody data-draw="bat-rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="bb-plain" id="pitching-table">
+        <h2>Pitching</h2>
+        <div class="bb-wrap">
+          <table data-source="pitching" data-row-key="player">
+            <thead><tr><th data-field="player">Player</th><th data-field="era">ERA</th><th data-field="whip">WHIP</th><th data-field="ip">IP</th><th data-field="w">W</th><th data-field="l">L</th><th data-field="sv">SV</th><th data-field="so">SO</th><th data-field="bb">BB</th><th data-source="pitch_rates" data-field="k9">K/9</th><th data-source="pitch_rates" data-field="bb9">BB/9</th></tr></thead>
+            <tbody data-draw="pitch-rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <details id="notes">
+        <summary>What the stats mean</summary>
+        <p>OPS is on-base percentage plus slugging percentage, one number for how often a hitter gets on and how much damage he does. WHIP is walks plus hits allowed per inning. K/9 and BB/9 are strikeouts and walks per nine innings. A one-run game is any game decided by exactly one run. "Best ERA among starters" counts pitchers with 20+ innings.</p>
+        <p>All numbers are the official 2026 cumulative stats from skidmoreathletics.com. Liberty League games are the 15 against Bard, Rensselaer, Ithaca, Vassar and Union.</p>
+      </details>
+    </section>
+  </div>
+</div>
+
+<script>
+dash.calc('record', {
+  inputs: ['games'],
+  title: 'Season record',
+  description: 'Wins, losses, runs, league and non-league records and one-run record, counted from the game-by-game results.',
+  fn: (games) => {
+    const g = games.map((r) => ({ win: r.result === 'W', rs: +r.rs, ra: +r.ra, league: r.conf === 'Y' }));
+    const count = (f) => g.filter(f).length;
+    const sum = (f) => g.reduce((a, r) => a + f(r), 0);
+    const oneRun = (r) => Math.abs(r.rs - r.ra) === 1;
+    return [{
+      games: g.length,
+      wins: count((r) => r.win), losses: count((r) => !r.win),
+      runs_scored: sum((r) => r.rs), runs_allowed: sum((r) => r.ra), run_diff: sum((r) => r.rs - r.ra),
+      runs_per_game: Math.round(sum((r) => r.rs) / g.length * 10) / 10,
+      conf_wins: count((r) => r.league && r.win), conf_losses: count((r) => r.league && !r.win),
+      nonconf_wins: count((r) => !r.league && r.win), nonconf_losses: count((r) => !r.league && !r.win),
+      onerun_wins: count((r) => oneRun(r) && r.win), onerun_losses: count((r) => oneRun(r) && !r.win)
+    }];
+  }
+});
+
+dash.calc('team_batting', {
+  inputs: ['batting'],
+  title: 'Team batting',
+  description: 'Team AVG, OBP, SLG and OPS added up from every hitter, plus stolen-base success and walk and strikeout rates per plate appearance (AB + BB + HBP + SF + SH).',
+  fn: (batting) => {
+    const sum = (k) => batting.reduce((a, r) => a + (+r[k] || 0), 0);
+    const ab = sum('ab'), h = sum('h'), bb = sum('bb'), hbp = sum('hbp'), sf = sum('sf'), tb = sum('tb');
+    const pa = ab + bb + hbp + sf + sum('sh');
+    const r3 = (x) => Math.round(x * 1000) / 1000;
+    const obp = (h + bb + hbp) / (ab + bb + hbp + sf), slg = tb / ab;
+    return [{ avg: r3(h / ab), obp: r3(obp), slg: r3(slg), ops: r3(obp + slg), sb: sum('sb'), sb_att: sum('sba'), sb_pct: r3(sum('sb') / sum('sba')), bb_pct: r3(bb / pa), k_pct: r3(sum('so') / pa) }];
+  }
+});
+
+dash.calc('team_pitching', {
+  inputs: ['pitching'],
+  title: 'Team pitching',
+  description: 'Team ERA, WHIP, K/9 and BB/9 added up from every pitcher (IP like 43.2 means 43 and 2/3 innings).',
+  fn: (pitching) => {
+    const sum = (k) => pitching.reduce((a, r) => a + (+r[k] || 0), 0);
+    const outs = pitching.reduce((a, r) => { const [w, f] = String(r.ip).split('.'); return a + (+w) * 3 + (+f || 0); }, 0);
+    const ip = outs / 3;
+    const r2 = (x) => Math.round(x * 100) / 100, r1 = (x) => Math.round(x * 10) / 10;
+    return [{ era: r2(sum('er') * 9 / ip), whip: r2((sum('h') + sum('bb')) / ip), k9: r1(sum('so') * 9 / ip), bb9: r1(sum('bb') * 9 / ip) }];
+  }
+});
+
+dash.calc('pitch_rates', {
+  inputs: ['pitching'],
+  title: 'Pitcher K/9 and BB/9',
+  description: 'Strikeouts and walks per nine innings for each pitcher.',
+  fn: (pitching) => pitching.map((r) => {
+    const [w, f] = String(r.ip).split('.');
+    const ip = ((+w) * 3 + (+f || 0)) / 3;
+    const r1 = (x) => Math.round(x * 10) / 10;
+    return { player: r.player, ip: r1(ip), k9: ip ? r1(+r.so * 9 / ip) : 0, bb9: ip ? r1(+r.bb * 9 / ip) : 0 };
+  })
+});
+
+dash.calc('hitter_rates', {
+  inputs: ['batting'],
+  title: 'Hitter rates',
+  description: 'Walk rate, strikeout rate and isolated power for each hitter with 50+ at-bats. Plate appearances are AB + BB + HBP + SF + SH.',
+  fn: (batting) => batting.filter((r) => +r.ab >= 50).map((r) => {
+    const pa = +r.ab + +r.bb + +r.hbp + +r.sf + +r.sh;
+    const r3 = (x) => Math.round(x * 1000) / 1000;
+    return { player: r.player, pa, bb_pct: r3(+r.bb / pa), k_pct: r3(+r.so / pa), avg: +r.avg, iso: r3(+r.slg - +r.avg) };
+  })
+});
+
+dash.calc('leaders', {
+  inputs: ['batting', 'pitching'],
+  title: 'Team leaders',
+  description: 'Top OPS among hitters with 50+ at-bats, most strikeouts, and best ERA among pitchers with 20+ innings.',
+  fn: (batting, pitching) => {
+    const top = (rows, f) => rows.reduce((best, r) => (best === null || f(r) > f(best) ? r : best), null);
+    const hitter = top(batting.filter((r) => +r.ab >= 50), (r) => +r.ops);
+    const strikeouts = top(pitching, (r) => +r.so);
+    const starter = top(pitching.filter((r) => parseFloat(r.ip) >= 20), (r) => -r.era);
+    return [{
+      ops_leader: hitter.player, ops_leader_ops: +hitter.ops,
+      k_leader: strikeouts.player, k_leader_so: +strikeouts.so,
+      era_leader: starter.player, era_leader_era: +starter.era
+    }];
+  }
+});
+
+window.bbFmt = {
+  int: d3.format(','),
+  signed: d3.format('+,'),
+  avg: (v) => d3.format('.3f')(v).replace(/^0/, ''),
+  d2: d3.format('.2f'),
+  d1: d3.format('.1f'),
+  pct: d3.format('.0%'),
+  text: (v) => String(v)
+};
+
+window.bbTip = (el, tip, ev, lines) => {
+  tip.style('display', null).selectAll('*').remove();
+  lines.forEach((t, i) => tip.append('div').attr('class', i ? 'bb-tip-m' : null).style('font-weight', i ? null : 600).text(t));
+  const [px, py] = d3.pointer(ev, el);
+  const w = tip.node().offsetWidth, h = tip.node().offsetHeight;
+  tip.style('left', Math.max(0, Math.min(px + 12, el.clientWidth - w)) + 'px').style('top', Math.max(0, py - h - 8) + 'px');
+};
+
+(() => {
+  const tabs = document.querySelectorAll('.bb-tab');
+  const show = (id) => {
+    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === id)));
+    document.querySelectorAll('.bb-panel').forEach((p) => { p.hidden = p.id !== id; });
+  };
+  tabs.forEach((t) => t.addEventListener('click', () => { show(t.dataset.tab); dash.setLink(t.dataset.tab); }));
+  const start = (location.hash || '').slice(1);
+  if ([...tabs].some((t) => t.dataset.tab === start)) show(start);
+})();
+
+dash.draw('v', (el) => {
+  const d = dash.data(el.dataset.source);
+  const row = d.status === 'ok' && d.data && d.data[0];
+  if (!row) { el.textContent = '—'; return; }
+  el.textContent = window.bbFmt[el.dataset.fmt || 'int'](row[el.dataset.field]);
+});
+
+dash.draw('games-chart', (el) => {
+  const d = dash.data('games');
+  el.replaceChildren();
+  if (d.status !== 'ok') { if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const rows = d.data.map((r, i) => ({ i, date: r.date, opp: r.opponent, loc: r.loc, res: r.result, rs: +r.rs, ra: +r.ra, league: r.conf === 'Y', diff: +r.rs - +r.ra }));
+  const W = el.clientWidth || 600, H = 280, m = { t: 10, r: 4, b: 34, l: 34 };
+  const x = d3.scaleBand().domain(rows.map((r) => r.i)).range([m.l, W - m.r]).padding(0.2);
+  const ext = d3.max(rows, (r) => Math.abs(r.diff));
+  const y = d3.scaleLinear().domain([-ext, ext]).nice().range([H - m.b, m.t]);
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('role', 'img').attr('aria-label', `Run differential for each of ${rows.length} games in 2026, wins above zero and losses below`);
+  svg.append('g').attr('transform', `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat((v) => v > 0 ? '+' + v : String(v)))
+    .call((g) => g.select('.domain').remove());
+  svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).style('stroke', '#9aa8a2');
+  const fmtDay = d3.utcFormat('%b %-d');
+  const months = rows.filter((r, i) => i === 0 || r.date.slice(0, 7) !== rows[i - 1].date.slice(0, 7));
+  svg.selectAll('.bb-m').data(months).join('text').attr('class', 'bb-lbl')
+    .attr('x', (r) => x(r.i)).attr('y', H - 4).text((r) => d3.utcFormat('%B')(new Date(r.date + 'T00:00:00Z')));
+  svg.selectAll('.bb-lg').data(rows.filter((r) => r.league)).join('circle')
+    .attr('cx', (r) => x(r.i) + x.bandwidth() / 2).attr('cy', H - m.b + 10).attr('r', 2.5).style('fill', '#5d6b65');
+  const tip = d3.select(el).append('div').attr('class', 'bb-tip').style('display', 'none');
+  svg.selectAll('.bb-bar').data(rows).join('rect').attr('class', 'bb-bar')
+    .attr('x', (r) => x(r.i)).attr('width', x.bandwidth())
+    .attr('y', (r) => y(Math.max(0, r.diff))).attr('height', (r) => Math.max(1, Math.abs(y(r.diff) - y(0))))
+    .attr('rx', 2)
+    .style('fill', (r) => r.res === 'W' ? '#2f5143' : '#c4693f')
+    .on('pointerenter pointermove pointerdown', (ev, r) => window.bbTip(el, tip, ev, [
+      `${r.res === 'W' ? 'Won' : 'Lost'} ${r.rs}-${r.ra} ${r.loc === 'A' ? 'at' : 'vs'} ${r.opp}`,
+      `${fmtDay(new Date(r.date + 'T00:00:00Z'))}${r.league ? ', League game' : ''}`
+    ]))
+    .on('pointerleave', () => tip.style('display', 'none'));
+});
+
+dash.draw('ops-chart', (el) => {
+  const d = dash.data('batting'), t = dash.data('team_batting');
+  el.replaceChildren();
+  if (d.status !== 'ok') { if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const rows = d.data.filter((r) => +r.ab >= 50).map((r) => ({ name: r.player, ops: +r.ops, obp: r.obp, slg: r.slg, ab: +r.ab })).sort((a, b) => b.ops - a.ops);
+  const W = el.clientWidth || 400, bh = 26, m = { t: 4, r: 44, b: 4 };
+  const H = m.t + m.b + rows.length * bh;
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('role', 'img').attr('aria-label', 'OPS by hitter with at least 50 at-bats, highest first');
+  const names = svg.append('g').selectAll('text').data(rows).join('text').attr('class', 'bb-lbl').text((r) => r.name);
+  const ml = (d3.max(names.nodes(), (n) => n.getComputedTextLength()) || 110) + 10;
+  const x = d3.scaleLinear().domain([0, d3.max(rows, (r) => r.ops)]).range([ml, W - m.r]);
+  const y = (i) => m.t + i * bh;
+  names.attr('x', ml - 8).attr('y', (r, i) => y(i) + bh / 2).attr('dy', '0.35em').attr('text-anchor', 'end');
+  const tip = d3.select(el).append('div').attr('class', 'bb-tip').style('display', 'none');
+  svg.selectAll('.bb-bar').data(rows).join('rect').attr('class', 'bb-bar')
+    .attr('x', ml).attr('y', (r, i) => y(i) + 5).attr('height', bh - 10).attr('width', (r) => Math.max(1, x(r.ops) - ml)).attr('rx', 3)
+    .style('fill', '#2f5143')
+    .on('pointerenter pointermove pointerdown', (ev, r) => window.bbTip(el, tip, ev, [r.name, `OPS ${window.bbFmt.avg(r.ops)} (OBP ${r.obp}, SLG ${r.slg}), ${r.ab} AB`]))
+    .on('pointerleave', () => tip.style('display', 'none'));
+  svg.selectAll('.bb-val').data(rows).join('text').attr('class', 'bb-val')
+    .attr('x', (r) => x(r.ops) + 4).attr('y', (r, i) => y(i) + bh / 2).attr('dy', '0.35em').text((r) => window.bbFmt.avg(r.ops));
+  const team = t.status === 'ok' && t.data[0] && t.data[0].ops;
+  if (team) {
+    svg.append('line').attr('x1', x(team)).attr('x2', x(team)).attr('y1', m.t).attr('y2', H - m.b)
+      .style('stroke', '#d8bd5c').style('stroke-width', 2).style('stroke-dasharray', '4 3').style('pointer-events', 'none');
+  }
+});
+
+dash.draw('pitch-chart', (el) => {
+  const d = dash.data('pitch_rates'), t = dash.data('team_pitching');
+  el.replaceChildren();
+  if (d.status !== 'ok' || !d.data) { if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const rows = d.data.filter((r) => r.ip >= 10);
+  const W = el.clientWidth || 400, H = 300, m = { t: 12, r: 16, b: 40, l: 40 };
+  const x = d3.scaleLinear().domain([0, d3.max(rows, (r) => r.bb9) * 1.1]).nice().range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain([0, d3.max(rows, (r) => r.k9) * 1.1]).nice().range([H - m.b, m.t]);
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('role', 'img').attr('aria-label', 'Strikeouts per nine innings against walks per nine innings for each pitcher with at least 10 innings');
+  svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(5).tickSize(-(H - m.t - m.b))).call((g) => g.select('.domain').remove());
+  svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r))).call((g) => g.select('.domain').remove());
+  svg.append('text').attr('class', 'bb-lbl').attr('x', W - m.r).attr('y', H - 6).attr('text-anchor', 'end').text('Walks per 9 →');
+  svg.append('text').attr('class', 'bb-lbl').attr('x', m.l + 4).attr('y', m.t + 10).text('↑ Strikeouts per 9');
+  const team = t.status === 'ok' && t.data[0];
+  if (team) {
+    svg.append('line').attr('x1', x(team.bb9)).attr('x2', x(team.bb9)).attr('y1', m.t).attr('y2', H - m.b).style('stroke', '#d8bd5c').style('stroke-width', 2).style('stroke-dasharray', '4 3');
+    svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(team.k9)).attr('y2', y(team.k9)).style('stroke', '#d8bd5c').style('stroke-width', 2).style('stroke-dasharray', '4 3');
+  }
+  const tip = d3.select(el).append('div').attr('class', 'bb-tip').style('display', 'none');
+  svg.selectAll('.bb-pt').data(rows).join('circle').attr('class', 'bb-pt')
+    .attr('cx', (r) => x(r.bb9)).attr('cy', (r) => y(r.k9)).attr('r', (r) => 4 + Math.sqrt(r.ip) * 0.6)
+    .style('fill', '#2f5143').style('fill-opacity', 0.85)
+    .on('pointerenter pointermove pointerdown', (ev, r) => window.bbTip(el, tip, ev, [r.player, `${r.k9} K/9, ${r.bb9} BB/9, ${r.ip} IP`]))
+    .on('pointerleave', () => tip.style('display', 'none'));
+  svg.selectAll('.bb-pl').data(rows).join('text').attr('class', 'bb-lbl').style('pointer-events', 'none')
+    .attr('x', (r) => x(r.bb9) + 4 + Math.sqrt(r.ip) * 0.6 + 3).attr('y', (r) => y(r.k9)).attr('dy', '0.35em')
+    .text((r) => r.player.split(' ').slice(-1)[0]);
+});
+
+window.bbScatter = (el, o) => {
+  el.replaceChildren();
+  const rows = o.rows;
+  const W = el.clientWidth || 400, H = 300, m = { t: 12, r: 16, b: 40, l: 44 };
+  const pad = (lo, hi) => [lo - (hi - lo) * 0.12, hi + (hi - lo) * 0.12];
+  const x = d3.scaleLinear().domain(pad(d3.min(rows, o.x), d3.max(rows, o.x))).nice().range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain(pad(d3.min(rows, o.y), d3.max(rows, o.y))).nice().range([H - m.b, m.t]);
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('role', 'img').attr('aria-label', o.aria);
+  svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(5).tickFormat(o.fx).tickSize(-(H - m.t - m.b))).call((g) => g.select('.domain').remove());
+  svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(o.fy).tickSize(-(W - m.l - m.r))).call((g) => g.select('.domain').remove());
+  svg.append('text').attr('class', 'bb-lbl').attr('x', W - m.r).attr('y', H - 6).attr('text-anchor', 'end').text(o.xLabel);
+  svg.append('text').attr('class', 'bb-lbl').attr('x', m.l + 4).attr('y', m.t + 10).text(o.yLabel);
+  const ref = (v, vertical) => v == null ? null : vertical
+    ? svg.append('line').attr('x1', x(v)).attr('x2', x(v)).attr('y1', m.t).attr('y2', H - m.b)
+    : svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(v)).attr('y2', y(v));
+  [ref(o.refX, true), ref(o.refY, false)].forEach((l) => l && l.style('stroke', '#d8bd5c').style('stroke-width', 2).style('stroke-dasharray', '4 3'));
+  const tip = d3.select(el).append('div').attr('class', 'bb-tip').style('display', 'none');
+  svg.selectAll('.bb-pt').data(rows).join('circle').attr('class', 'bb-pt')
+    .attr('cx', (r) => x(o.x(r))).attr('cy', (r) => y(o.y(r))).attr('r', 6)
+    .style('fill', '#2f5143').style('fill-opacity', 0.85)
+    .on('pointerenter pointermove pointerdown', (ev, r) => window.bbTip(el, tip, ev, o.tip(r)))
+    .on('pointerleave', () => tip.style('display', 'none'));
+  const placed = [];
+  rows.map((r) => ({ r, px: x(o.x(r)), py: y(o.y(r)) })).sort((a, b) => a.py - b.py).forEach((p) => {
+    let ly = p.py;
+    while (placed.some((q) => Math.abs(q.ly - ly) < 12 && Math.abs(q.px - p.px) < 80)) ly += 12;
+    placed.push({ px: p.px, ly });
+    const right = p.px < W - 80;
+    svg.append('text').attr('class', 'bb-lbl').style('pointer-events', 'none')
+      .attr('x', right ? p.px + 9 : p.px - 9).attr('y', ly).attr('dy', '0.35em').attr('text-anchor', right ? 'start' : 'end')
+      .text(p.r.player.split(' ').slice(-1)[0]);
+  });
+};
+
+window.bbBars = (el, o) => {
+  el.replaceChildren();
+  const rows = o.rows;
+  const W = el.clientWidth || 400, bh = 26, m = { t: 4, r: o.right, b: 4 };
+  const H = m.t + m.b + rows.length * bh;
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('role', 'img').attr('aria-label', o.aria);
+  const names = svg.append('g').selectAll('text').data(rows).join('text').attr('class', 'bb-lbl').text((r) => r.name);
+  const ml = (d3.max(names.nodes(), (n) => n.getComputedTextLength()) || 110) + 10;
+  const x = d3.scaleLinear().domain([0, d3.max(rows, o.max)]).range([ml, W - m.r]);
+  const y = (i) => m.t + i * bh;
+  names.attr('x', ml - 8).attr('y', (r, i) => y(i) + bh / 2).attr('dy', '0.35em').attr('text-anchor', 'end');
+  const tip = d3.select(el).append('div').attr('class', 'bb-tip').style('display', 'none');
+  if (o.track) svg.selectAll('.bb-track').data(rows).join('rect').attr('class', 'bb-track')
+    .attr('x', ml).attr('y', (r, i) => y(i) + 5).attr('height', bh - 10).attr('width', (r) => Math.max(1, x(o.track(r)) - ml)).attr('rx', 3).style('fill', '#dfe4e0');
+  svg.selectAll('.bb-bar').data(rows).join('rect').attr('class', 'bb-bar')
+    .attr('x', ml).attr('y', (r, i) => y(i) + 5).attr('height', bh - 10).attr('width', (r) => Math.max(1, x(o.value(r)) - ml)).attr('rx', 3)
+    .style('fill', o.color)
+    .on('pointerenter pointermove pointerdown', (ev, r) => window.bbTip(el, tip, ev, o.tip(r)))
+    .on('pointerleave', () => tip.style('display', 'none'));
+  svg.selectAll('.bb-val').data(rows).join('text').attr('class', 'bb-val')
+    .attr('x', (r) => x(o.max(r)) + 4).attr('y', (r, i) => y(i) + bh / 2).attr('dy', '0.35em').text(o.label);
+};
+
+dash.draw('discipline-chart', (el) => {
+  const d = dash.data('hitter_rates'), t = dash.data('team_batting');
+  if (d.status !== 'ok' || !d.data) { el.replaceChildren(); if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const team = t.status === 'ok' && t.data[0];
+  const pct = d3.format('.0%'), pct1 = d3.format('.1%');
+  window.bbScatter(el, {
+    rows: d.data, x: (r) => r.k_pct, y: (r) => r.bb_pct, fx: pct, fy: pct,
+    xLabel: 'Strikeout rate →', yLabel: '↑ Walk rate',
+    refX: team ? team.k_pct : null, refY: team ? team.bb_pct : null,
+    aria: 'Walk rate against strikeout rate for each hitter with at least 50 at-bats',
+    tip: (r) => [r.player, `${pct1(r.bb_pct)} walks, ${pct1(r.k_pct)} strikeouts, ${r.pa} PA`]
+  });
+});
+
+dash.draw('power-chart', (el) => {
+  const d = dash.data('hitter_rates');
+  if (d.status !== 'ok' || !d.data) { el.replaceChildren(); if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const avg = window.bbFmt.avg;
+  window.bbScatter(el, {
+    rows: d.data, x: (r) => r.avg, y: (r) => r.iso, fx: avg, fy: avg,
+    xLabel: 'Batting average →', yLabel: '↑ Isolated power',
+    aria: 'Isolated power against batting average for each hitter with at least 50 at-bats',
+    tip: (r) => [r.player, `AVG ${avg(r.avg)}, ISO ${avg(r.iso)}`]
+  });
+});
+
+dash.draw('steals-chart', (el) => {
+  const d = dash.data('batting');
+  if (d.status !== 'ok') { el.replaceChildren(); if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const rows = d.data.filter((r) => +r.sba >= 4).map((r) => ({ name: r.player, sb: +r.sb, att: +r.sba })).sort((a, b) => b.sb - a.sb || b.att - a.att);
+  window.bbBars(el, {
+    rows, right: 64, value: (r) => r.sb, track: (r) => r.att, max: (r) => r.att, color: '#2f5143',
+    label: (r) => `${r.sb} of ${r.att}`,
+    aria: 'Stolen bases out of attempts for players with at least 4 attempts',
+    tip: (r) => [r.name, `${r.sb} steals in ${r.att} tries (${d3.format('.0%')(r.sb / r.att)})`]
+  });
+});
+
+dash.draw('workload-chart', (el) => {
+  const d = dash.data('pitching'), t = dash.data('team_pitching');
+  if (d.status !== 'ok') { el.replaceChildren(); if (d.status === 'error') el.textContent = 'Failed to load'; return; }
+  const teamEra = t.status === 'ok' && t.data[0] ? t.data[0].era : null;
+  const rows = d.data.map((r) => { const [w, f] = String(r.ip).split('.'); return { name: r.player, ipText: r.ip, ip: ((+w) * 3 + (+f || 0)) / 3, era: +r.era, app: r.app, gs: r.gs }; })
+    .filter((r) => r.ip >= 10).sort((a, b) => b.ip - a.ip);
+  window.bbBars(el, {
+    rows, right: 130, value: (r) => r.ip, max: (r) => r.ip,
+    color: (r) => teamEra == null || r.era <= teamEra ? '#2f5143' : '#c4693f',
+    label: (r) => `${r.ipText} IP, ${r.era.toFixed(2)} ERA`,
+    aria: 'Innings pitched for each pitcher with at least 10 innings, colored by ERA against the team ERA',
+    tip: (r) => [r.name, `${r.ipText} IP, ${r.era.toFixed(2)} ERA, ${r.app} games, ${r.gs} starts`]
+  });
+});
+
+dash.draw('bat-rows', (tb) => {
+  const d = dash.data('batting');
+  if (d.status !== 'ok') { tb.replaceChildren(); return; }
+  const cols = ['player', 'avg', 'obp', 'slg', 'ops', 'ab', 'r', 'h', '2b', 'hr', 'rbi', 'bb', 'so', 'sb'];
+  tb.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    cols.forEach((c) => { const td = document.createElement('td'); td.textContent = r[c]; tr.append(td); });
+    return tr;
+  }));
+});
+
+dash.draw('pitch-rows', (tb) => {
+  const d = dash.data('pitching'), rt = dash.data('pitch_rates');
+  if (d.status !== 'ok') { tb.replaceChildren(); return; }
+  const rates = new Map((rt.status === 'ok' && rt.data ? rt.data : []).map((r) => [r.player, r]));
+  const cols = ['player', 'era', 'whip', 'ip', 'w', 'l', 'sv', 'so', 'bb'];
+  tb.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    cols.forEach((c) => { const td = document.createElement('td'); td.textContent = r[c]; tr.append(td); });
+    const rr = rates.get(r.player);
+    ['k9', 'bb9'].forEach((c) => { const td = document.createElement('td'); td.textContent = rr ? rr[c].toFixed(1) : '—'; tr.append(td); });
+    return tr;
+  }));
+});
+</script>
+
+</body>
+</html>
