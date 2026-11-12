@@ -12,12 +12,12 @@ A season-in-review dashboard for Skidmore College baseball, built from the offic
 
 ## What's in the dashboard
 
-- **Overview:** record, run differential, team OPS and ERA, and a "What stands out" summary.
+- **Overview:** a scoreboard comparing the record outside the Liberty League with the record inside it, a season stat strip, every league weekend series, and a "What stands out" summary.
 - **Players:** OPS by hitter, plate discipline (walk rate vs. strikeout rate), power vs. average, stolen bases, pitcher strikeouts vs. walks, and pitcher workload colored by ERA.
-- **Season:** run differential for all 33 games, with Liberty League games marked.
-- **Data:** full batting and pitching tables, plus definitions.
+- **Season:** run differential for all 33 games with Liberty League series shaded, plus a sortable game log.
+- **Data:** sortable batting and pitching tables with a "regulars only" filter, CSV downloads, and definitions.
 
-Every chart has hover tooltips, and every summary number is computed from the CSVs, so updating the data updates the page.
+Every chart has hover and tap tooltips and can be stepped through with the arrow keys once focused. Every summary number is computed from the CSVs, so updating the data updates the page. If the data or the chart library fails to load, the page says so instead of showing blanks.
 
 ## Data
 
